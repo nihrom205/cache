@@ -43,75 +43,59 @@ type Order struct {
 	UpdatedAt time.Time
 }
 
+type ItemCache struct {
+	profile  *Profile
+	CreateAt time.Time
+}
+
 type Cache struct {
-	cache map[string]*Profile
+	cache map[string]*ItemCache
 	ttl   time.Duration
 	mu    sync.RWMutex
 }
 
 func NewCache(ttl time.Duration) *Cache {
-	return &Cache{
-		cache: make(map[string]*Profile),
+	cache := &Cache{
+		cache: make(map[string]*ItemCache),
 		ttl:   ttl,
+		mu:    sync.RWMutex{},
+	}
+	go cache.cleanUp()
+	return cache
+}
+
+func (c *Cache) Set(uuid string, profile *Profile) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cache[uuid] = &ItemCache{
+		profile:  profile,
+		CreateAt: time.Now(),
 	}
 }
 
-func (c *Cache) Add(uuid string, profile Profile) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.cache[uuid] = &profile
-	c.clean()
-}
-
-func (c *Cache) Get(uuid string) *Profile {
-	//Если TTL истек, то возвращается nil. При апдейте TTL снова устанавливается 2 сек. Методы должны быть потокобезопасными
+func (c *Cache) Get(uuid string) (*Profile, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	profile, ok := c.cache[uuid]
+	item, ok := c.cache[uuid]
 	if !ok {
-		return nil
+		return nil, false
 	}
-	for _, order := range profile.Orders {
-		if time.Since(order.CreatedAt) > c.ttl && time.Since(order.UpdatedAt) > c.ttl {
-			return nil
-		}
+	if time.Since(item.CreateAt) > c.ttl {
+		return nil, false
 	}
-	return profile
+	return item.profile, true
 }
 
-func (c *Cache) Update(uuid string, profile Profile) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	_, ok := c.cache[uuid]
-	if !ok {
-		return
-	}
-
-	for _, p := range profile.Orders {
-		p.UpdatedAt = time.Now()
-	}
-	c.cache[uuid] = &profile
-}
-
-func (c *Cache) clean() {
-	// по заданному условию автоматическая очистка истекших записей
-	go func() {
-
-		for {
-			select {
-			case <-time.After(2 * time.Second):
-				c.mu.Lock()
-				for uuid, profile := range c.cache {
-					for _, order := range profile.Orders {
-						if time.Since(order.CreatedAt) > c.ttl && time.Since(order.UpdatedAt) > c.ttl {
-							delete(c.cache, uuid)
-							return
-						}
-					}
-				}
-				c.mu.Unlock()
-			default:
+func (c *Cache) cleanUp() {
+	tick := time.NewTicker(c.ttl)
+	defer tick.Stop()
+	for range tick.C {
+		c.mu.Lock()
+		for uuid, item := range c.cache {
+			if time.Since(item.CreateAt) > c.ttl {
+				delete(c.cache, uuid)
 			}
 		}
-	}()
+		c.mu.Unlock()
+	}
 }

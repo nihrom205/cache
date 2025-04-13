@@ -8,14 +8,18 @@ import (
 func TestName(t *testing.T) {
 	cache := NewCache(2 * time.Second)
 
-	cache.Add("uuid1", Profile{
+	cache.Set("uuid1", &Profile{
 		UUID: "uuid1",
 		Name: "John Doe",
 		Orders: []*Order{
 			{UUID: "order1", Value: 100, CreatedAt: time.Now(), UpdatedAt: time.Now()},
 		},
 	})
-	profile := cache.Get("uuid1")
+
+	profile, ok := cache.Get("uuid1")
+	if ok != true {
+		t.Error("expected ok to be true")
+	}
 	if profile == nil {
 		t.Errorf("Profile not found")
 	}
@@ -27,7 +31,7 @@ func TestName(t *testing.T) {
 func TestName2(t *testing.T) {
 	cache := NewCache(2 * time.Second)
 
-	cache.Add("uuid1", Profile{
+	cache.Set("uuid1", &Profile{
 		UUID: "uuid1",
 		Name: "John Doe",
 		Orders: []*Order{
@@ -37,7 +41,10 @@ func TestName2(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	profile := cache.Get("uuid1")
+	profile, ok := cache.Get("uuid1")
+	if ok != false {
+		t.Error("expected ok to be true")
+	}
 	if profile != nil {
 		t.Errorf("Profile not found")
 	}
@@ -46,7 +53,7 @@ func TestName2(t *testing.T) {
 func TestName3(t *testing.T) {
 	cache := NewCache(2 * time.Second)
 
-	cache.Add("uuid1", Profile{
+	cache.Set("uuid1", &Profile{
 		UUID: "uuid1",
 		Name: "John Doe",
 		Orders: []*Order{
@@ -56,7 +63,10 @@ func TestName3(t *testing.T) {
 
 	time.Sleep(10 * time.Second)
 
-	profile := cache.Get("uuid1")
+	profile, ok := cache.Get("uuid1")
+	if ok != false {
+		t.Error("expected ok to be true")
+	}
 	if profile != nil {
 		t.Errorf("Profile not found")
 	}
